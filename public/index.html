@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shutdown Timer</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  :root {
+    --bg: #0c0c10;
+    --surface: #14141b;
+    --surface-2: #1c1c26;
+    --border: #242430;
+    --text: #e8e8ee;
+    --text-2: #8888a0;
+    --text-3: #5c5c72;
+    --accent: #6c5ce7;
+    --accent-glow: rgba(108, 92, 231, .25);
+    --danger: #e74c5e;
+    --danger-glow: rgba(231, 76, 94, .2);
+    --success: #2ed573;
+    --radius: 14px;
+    --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Card ─────────────────────────────────────────────────── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 40px 44px;
+    width: 420px;
+    max-width: 94vw;
+    box-shadow: 0 0 0 1px rgba(255,255,255,.02), 0 20px 60px rgba(0,0,0,.4);
+    transition: opacity .3s;
+  }
+
+  /* ── Header ───────────────────────────────────────────────── */
+  .header {
+    display: flex; align-items: center; gap: 12px; margin-bottom: 32px;
+  }
+  .header .icon {
+    width: 36px; height: 36px; border-radius: 10px;
+    background: linear-gradient(135deg, var(--accent), #a78bfa);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 18px;
+    box-shadow: 0 0 20px var(--accent-glow);
+  }
+  .header h1 {
+    font-size: 17px; font-weight: 600; letter-spacing: -.01em;
+  }
+  .header .sub {
+    font-size: 12px; color: var(--text-3);
+  }
+
+  /* ── Timer display ────────────────────────────────────────── */
+  .timer-wrap {
+    text-align: center; padding: 28px 0 24px; display: none;
+  }
+  .timer-wrap.visible { display: block; }
+  .timer-display {
+    font-family: var(--font-mono);
+    font-size: 64px; font-weight: 500;
+    letter-spacing: -.03em; line-height: 1;
+    background: linear-gradient(135deg, var(--text), #a78bfa);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    background-clip: text;
+    transition: all .3s;
+  }
+  .timer-display.danger {
+    background: linear-gradient(135deg, var(--danger), #f39c12);
+    -webkit-background-clip: text; background-clip: text;
+  }
+  .timer-label {
+    font-size: 12px; color: var(--text-3); margin-top: 8px;
+    letter-spacing: .06em; text-transform: uppercase;
+  }
+  .timer-target {
+    font-size: 12px; color: var(--text-2); margin-top: 4px;
+  }
+
+  /* ── Input area ───────────────────────────────────────────── */
+  .input-area { margin-bottom: 20px; }
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 16px;
+    background: var(--surface-2); border-radius: 8px; padding: 3px;
+  }
+  .tab {
+    flex: 1; text-align: center; padding: 7px 0;
+    font-size: 12px; font-weight: 500; color: var(--text-3);
+    border-radius: 6px; cursor: pointer; transition: all .2s;
+    border: none; background: none; font-family: var(--font);
+  }
+  .tab:hover { color: var(--text-2); }
+  .tab.active {
+    background: var(--surface); color: var(--text);
+    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  }
+  .input-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 10px; padding: 4px 6px 4px 16px;
+    transition: border-color .2s;
+  }
+  .input-row:focus-within { border-color: var(--accent); }
+  .input-row input {
+    flex: 1; background: none; border: none; outline: none;
+    font-family: var(--font-mono); font-size: 15px; color: var(--text);
+    padding: 8px 0;
+  }
+  .input-row input::placeholder { color: var(--text-3); }
+  .input-row .unit {
+    font-size: 12px; color: var(--text-3);
+    padding-right: 10px;
+  }
+  .input-row .btn-go {
+    background: var(--accent); border: none; border-radius: 8px;
+    color: #fff; font-size: 13px; font-weight: 600;
+    padding: 8px 20px; cursor: pointer;
+    transition: all .2s; font-family: var(--font);
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .input-row .btn-go:hover {
+    background: #7c6cf7; transform: scale(1.02);
+    box-shadow: 0 0 24px var(--accent-glow);
+  }
+  .input-row .btn-go:active { transform: scale(.97); }
+
+  /* ── Start / Stop buttons ─────────────────────────────────── */
+  .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .actions.hidden { display: none; }
+  .btn {
+    flex: 1; padding: 11px 0; border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
+    border: none; font-family: var(--font);
+    transition: all .2s;
+  }
+  .btn-start {
+    background: var(--accent); color: #fff;
+    box-shadow: 0 0 16px var(--accent-glow);
+  }
+  .btn-start:hover { background: #7c6cf7; }
+  .btn-ghost {
+    background: var(--surface-2); color: var(--text-2);
+    border: 1px solid var(--border);
+  }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text-3); }
+  .btn-stop {
+    background: var(--danger); color: #fff;
+    box-shadow: 0 0 16px var(--danger-glow);
+  }
+  .btn-stop:hover { background: #ff6b7a; }
+
+  /* ── Quick picks ──────────────────────────────────────────── */
+  .quick-picks {
+    display: flex; gap: 6px; margin-top: 12px; flex-wrap: wrap;
+  }
+  .quick-pick {
+    padding: 5px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface-2); color: var(--text-2);
+    font-size: 11px; font-family: var(--font-mono); cursor: pointer;
+    transition: all .15s;
+  }
+  .quick-pick:hover {
+    border-color: var(--accent); color: var(--accent);
+    background: rgba(108,92,231,.06);
+  }
+
+  /* ── Status bar ───────────────────────────────────────────── */
+  .status {
+    margin-top: 20px; padding-top: 16px;
+    border-top: 1px solid var(--border);
+    font-size: 12px; color: var(--text-3); text-align: center;
+  }
+
+  /* ── Animation ────────────────────────────────────────────── */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: .4; }
+  }
+  .pulse { animation: pulse 1s ease-in-out infinite; }
+
+  /* ── Input number arrows hidden ───────────────────────────── */
+  input[type=number]::-webkit-inner-spin-button,
+  input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+  input[type=number] { -moz-appearance: textfield; }
+</style>
+</head>
+<body>
+
+<div class="card" id="app">
+  <!-- Header -->
+  <div class="header">
+    <div class="icon">⏰</div>
+    <div>
+      <h1>Shutdown Timer</h1>
+      <div class="sub">Windows 定时关机</div>
+    </div>
+  </div>
+
+  <!-- Timer display (visible when active) -->
+  <div class="timer-wrap" id="timerWrap">
+    <div class="timer-display" id="timerDisplay">00:00:00</div>
+    <div class="timer-label">倒计时</div>
+    <div class="timer-target" id="timerTarget"></div>
+  </div>
+
+  <!-- Input area (hidden when timer active) -->
+  <div class="input-area" id="inputArea">
+    <!-- Tab switch -->
+    <div class="tabs">
+      <button class="tab active" data-tab="countdown" id="tabCountdown">倒计时</button>
+      <button class="tab" data-tab="time" id="tabTime">定时关机</button>
+    </div>
+
+    <!-- Countdown input -->
+    <div class="input-row" id="inputCountdown">
+      <input type="number" id="minutesInput" placeholder="30" min="1" autofocus>
+      <span class="unit">分钟</span>
+      <button class="btn-go" id="btnStartCountdown">开始</button>
+    </div>
+
+    <!-- Time input -->
+    <div class="input-row" id="inputTime" style="display:none">
+      <input type="time" id="timeInput">
+      <button class="btn-go" id="btnStartTime">定时关机</button>
+    </div>
+
+    <!-- Quick picks -->
+    <div class="quick-picks">
+      <span class="quick-pick" data-min="15">15m</span>
+      <span class="quick-pick" data-min="30">30m</span>
+      <span class="quick-pick" data-min="60">1h</span>
+      <span class="quick-pick" data-min="120">2h</span>
+      <span class="quick-pick" data-min="0">立即关机</span>
+    </div>
+  </div>
+
+  <!-- Action buttons -->
+  <div class="actions hidden" id="actions">
+    <button class="btn btn-stop" id="btnStop">取消关机</button>
+  </div>
+
+  <!-- Status -->
+  <div class="status" id="status">就绪，设置倒计时后自动关机</div>
+</div>
+
+<script>
+// ── Elements ──────────────────────────────────────────────────
+const timerWrap = document.getElementById("timerWrap");
+const timerDisplay = document.getElementById("timerDisplay");
+const timerTarget = document.getElementById("timerTarget");
+const inputArea = document.getElementById("inputArea");
+const actions = document.getElementById("actions");
+const status = document.getElementById("status");
+const btnStop = document.getElementById("btnStop");
+
+const tabCountdown = document.getElementById("tabCountdown");
+const tabTime = document.getElementById("tabTime");
+const inputCountdown = document.getElementById("inputCountdown");
+const inputTime = document.getElementById("inputTime");
+const minutesInput = document.getElementById("minutesInput");
+const timeInput = document.getElementById("timeInput");
+const btnStartCountdown = document.getElementById("btnStartCountdown");
+const btnStartTime = document.getElementById("btnStartTime");
+
+// ── Tab switching ─────────────────────────────────────────────
+tabCountdown.addEventListener("click", () => {
+  tabCountdown.classList.add("active");
+  tabTime.classList.remove("active");
+  inputCountdown.style.display = "flex";
+  inputTime.style.display = "none";
+  minutesInput.focus();
+});
+tabTime.addEventListener("click", () => {
+  tabTime.classList.add("active");
+  tabCountdown.classList.remove("active");
+  inputTime.style.display = "flex";
+  inputCountdown.style.display = "none";
+  timeInput.focus();
+});
+
+// Set default time input to current time + 1 hour
+(function setDefaultTime() {
+  const d = new Date(Date.now() + 3600000);
+  timeInput.value = `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+})();
+
+// ── Quick picks ───────────────────────────────────────────────
+document.querySelectorAll(".quick-pick").forEach((el) => {
+  el.addEventListener("click", () => {
+    const min = parseInt(el.dataset.min, 10);
+    if (min === 0) {
+      startTimer("countdown", 0);
+    } else {
+      tabCountdown.click();
+      minutesInput.value = min;
+      startTimer("countdown", min);
+    }
+  });
+});
+
+// ── Format helpers ────────────────────────────────────────────
+function fmtTime(ms) {
+  if (ms <= 0) return "00:00";
+  const totalSec = Math.ceil(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+function fmtTarget(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const h = d.getHours();
+  const m = String(d.getMinutes()).padStart(2, "0");
+  const ampm = h >= 12 ? "下午" : "上午";
+  const hh = h % 12 || 12;
+  return `预计关机时间 · ${ampm} ${hh}:${m}`;
+}
+
+// ── API calls ─────────────────────────────────────────────────
+async function startTimer(type, minutes) {
+  status.textContent = "正在设置…";
+  status.style.color = "";
+  try {
+    const res = await fetch("/api/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(type === "countdown"
+        ? { type: "countdown", minutes }
+        : { type: "time", time: timeInput.value }
+      ),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      status.textContent = `❌ ${data.error || "请求失败"}`;
+      status.style.color = "var(--danger)";
+      return;
+    }
+    status.textContent = "✅ 定时已设定";
+    status.style.color = "var(--success)";
+  } catch (e) {
+    status.textContent = `❌ 连接失败: ${e.message}`;
+    status.style.color = "var(--danger)";
+  }
+}
+
+async function stopTimer() {
+  status.textContent = "正在取消…";
+  status.style.color = "";
+  try {
+    await fetch("/api/stop", { method: "POST" });
+    status.textContent = "⏹ 已取消关机";
+    status.style.color = "";
+  } catch (e) {
+    status.textContent = `❌ 取消失败: ${e.message}`;
+    status.style.color = "var(--danger)";
+  }
+}
+
+// ── Start buttons ─────────────────────────────────────────────
+btnStartCountdown.addEventListener("click", () => {
+  const val = parseInt(minutesInput.value, 10);
+  if (isNaN(val) || val < 1) {
+    status.textContent = "请输入有效分钟数（≥ 1）";
+    status.style.color = "var(--danger)";
+    return;
+  }
+  startTimer("countdown", val);
+});
+minutesInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") btnStartCountdown.click();
+});
+
+btnStartTime.addEventListener("click", () => {
+  if (!timeInput.value) {
+    status.textContent = "请选择时间";
+    status.style.color = "var(--danger)";
+    return;
+  }
+  startTimer("time");
+});
+timeInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") btnStartTime.click();
+});
+
+// ── Stop button ───────────────────────────────────────────────
+btnStop.addEventListener("click", stopTimer);
+
+// ── SSE connection ────────────────────────────────────────────
+function connectSSE() {
+  const evtSource = new EventSource("/api/events");
+  evtSource.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      switch (data.type) {
+        case "tick": {
+          if (data.active) {
+            timerWrap.classList.add("visible");
+            inputArea.style.display = "none";
+            actions.classList.remove("hidden");
+            timerDisplay.textContent = fmtTime(data.remainingMs);
+            timerDisplay.classList.toggle("danger", data.remainingMs < 120000);
+            timerDisplay.classList.toggle("pulse", data.remainingMs < 10000);
+            timerTarget.textContent = fmtTarget(data.targetTime);
+            if (data.remainingMs <= 0) {
+              status.textContent = "🔄 正在关机…";
+            } else {
+              status.textContent = "定时关机已启动";
+              status.style.color = "";
+            }
+          } else {
+            timerWrap.classList.remove("visible");
+            inputArea.style.display = "block";
+            actions.classList.add("hidden");
+            timerDisplay.classList.remove("danger", "pulse");
+          }
+          break;
+        }
+        case "shutting_down": {
+          status.textContent = "🔄 " + (data.message || "正在关机…");
+          timerDisplay.textContent = "00:00";
+          timerWrap.classList.add("visible");
+          break;
+        }
+        case "error": {
+          status.textContent = `⚠️ ${data.message}`;
+          status.style.color = "var(--danger)";
+          break;
+        }
+      }
+    } catch {}
+  };
+  evtSource.onerror = () => {
+    status.textContent = "⚠️ 与服务器断开，尝试重连…";
+    status.style.color = "var(--danger)";
+  };
+}
+connectSSE();
+
+// ── Load initial state ────────────────────────────────────────
+fetch("/api/state")
+  .then((r) => r.json())
+  .then((state) => {
+    if (state.active) {
+      timerWrap.classList.add("visible");
+      inputArea.style.display = "none";
+      actions.classList.remove("hidden");
+      timerDisplay.textContent = fmtTime(state.remainingMs);
+      timerDisplay.classList.toggle("danger", state.remainingMs < 120000);
+      timerTarget.textContent = fmtTarget(state.targetTime);
+      status.textContent = "定时关机已启动";
+    }
+  })
+  .catch(() => {});
+</script>
+</body>
+</html>
